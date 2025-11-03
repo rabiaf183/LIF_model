@@ -30,6 +30,23 @@ def default_pars(**kwargs):
 
 pars = default_pars()
 print(pars)
+
+def plot_volt_trace(pars, v, sp):
+    t = pars['range_t']                      # Time axis (0 → T ms)
+    plt.figure()
+    plt.plot(t, v, lw=1)                     # Plot voltage vs time
+
+    # Optional: mark spike times as dashed vertical lines
+    if len(sp):
+        ymin, ymax = v.min() - 5, v.max() + 5
+        plt.vlines(sp, ymin, ymax, linestyles='dashed', linewidth=0.8)
+
+    plt.xlabel('Time [ms]')
+    plt.ylabel('Membrane potential [mV]')
+    plt.title('LIF voltage trace')
+    plt.tight_layout()
+    plt.show()
+
 def run_LIF(pars, Iinj, stop=False):
   """
   Simulate the LIF dynamics with external input current
@@ -52,3 +69,53 @@ def run_LIF(pars, Iinj, stop=False):
   dt, range_t = pars['dt'], pars['range_t']
   Lt = range_t.size
   tref = pars['tref']
+
+  # Initialize voltage
+  v = np.zeros(Lt) #400-0/0.1=4000
+  v[0] = V_init # initalize first value with V_init
+
+  # Set current time course
+  Iinj = Iinj * np.ones(Lt) # range is 4000 so if Iinj=200 then it becomes array of 200s of size 4000
+
+  # If current pulse, set beginning and end to 0
+  if stop:
+    Iinj[:int(len(Iinj) / 2) - 1000] = 0 # first half -1000 values are 0
+    Iinj[int(len(Iinj) / 2) + 1000:] = 0# last half -1000 values are 0
+
+
+    # Loop over time
+  rec_spikes = []  # record spike times
+  tr = 0.  # the count for refractory duration
+
+  for it in range(Lt - 1):
+
+    if tr > 0:  # check if in refractory period
+      v[it] = V_reset  # set voltage to reset
+      tr = tr - 1 # reduce running counter of refractory period
+
+    elif v[it] >= V_th:  # if voltage over threshold
+      rec_spikes.append(it)  # record spike event
+      v[it] = V_reset  # reset voltage
+      tr = tref / dt  # set refractory counter
+
+    dv_dt = (-(v[it] - E_L) + Iinj[it] / g_L) / tau_m
+    dv    = dt * dv_dt
+    dv = dt * dv_dt
+    v[it + 1] = v[it] + dv
+    # Get spike times in ms
+  rec_spikes = np.array(rec_spikes) * dt
+
+  return v, rec_spikes
+
+
+# Get parameters
+pars = default_pars(T=500)
+
+# Simulate LIF model
+v, sp = run_LIF(pars, Iinj=100, stop=True)
+
+# Visualize
+plot_volt_trace(pars, v, sp)
+
+
+
